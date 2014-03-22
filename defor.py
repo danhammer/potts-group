@@ -1,10 +1,6 @@
-import os
-import urllib
+import requests
 import json
-import itertools
-
 import pandas as pd
-from osgeo import ogr
 
 # Go from JSON to a measurement of UMD deforestation by year.  If you
 # have a shapefile, you will have to convert and simplify the
@@ -19,7 +15,7 @@ from osgeo import ogr
 # young Padawan, JSON is the destination.  Specifically,
 # data/map.json.
 
-def _read_data(data='data/map.json'):
+def _read_data(data='data/map.geojson'):
     """Returns a list of JSON dictionaries, one for each feature of
     the polygons.
 
@@ -35,11 +31,10 @@ def _force_ring(coords):
     same.
 
     """
-    x = coords[0]
-    if x[0] != x[-1]:
-        return [x + x[-1]]
+    if coords[0] != coords[-1]:
+        return [coords + coords[-1]]
     else: 
-        return [x]
+        return [coords]
 
 
 def _polygon(coords):
@@ -55,11 +50,13 @@ def _params(coords, year):
 
 def _grab_loss(coords, year):
     """Returns the loss in hectares of the supplied coordinates and
-    year from the UMD data set hosted on Earth Engine via GFW API.
+    year from the UMD data set hosted on Earth Engine via GFW API.  We
+    use a POST request to circumvent the URL length limit on Earth
+    Engine queries (i.e., we can't reliably use a `get` request)
 
     """
-    url = 'http://gfw-apis.appspot.com/datasets/umd'
-    res = requests.post(url, data=_params(coords, year))
+    endpoint = 'http://gfw-apis.appspot.com/datasets/umd'
+    res = requests.post(endpoint, data=_params(coords, year))
     return res.json()['loss']
 
 
@@ -83,7 +80,7 @@ def _process_entry(entry):
     return res
 
 
-def _filter_admin(prov, subprov, data='data/map.json'):
+def _filter_admin(prov, subprov, data='data/map.geojson'):
     """Accepts a province and subprovince name (strings) and a data
     source in json format and returns the multipolygon associated with
     that administrative unit.
@@ -95,5 +92,4 @@ def _filter_admin(prov, subprov, data='data/map.json'):
         x = xx['properties']
         return (x['NAME_1'] == prov) & (x['NAME_2'] == subprov)
     
-    return filter(_spec_filter, polys)
-
+    return filter(_spec_filter, polys)[0]
